@@ -1,7 +1,7 @@
 /*___________________________________________
  |                                           |
- | SNMP Text Traffic Grapher --- Version 2.0 |
- | Copyright (c) 2005-2009 by Antoni Sawicki |
+ | SNMP Text Traffic Grapher --- Version 2.1 |
+ | Copyright (c) 2005-2012 by Antoni Sawicki |
  | Homepage ---- http://www.tenox.tc/out#ttg |
  | TTG is licensed under terms & cond of BSD |
  |___________________________________________|
@@ -9,16 +9,17 @@
  |
  | Compilation (Unix): cc ttg.c -o ttg -lnetsnmp 
  |
- | Net-SNMP may also require: -lcrypto -lsocket -lnsl 
- |  -liberty -lregex -lws2_32 (Win32) -lkstat (SunOS)
+ | Net-SNMP may also require: -lcrypto -lsocket -lnsl -liberty -lregex -lws2_32 (Win32) -lkstat (SunOS)
  |
  | For a minimal static snmplib build you may use:
- | ./configure --disable-agent --disable-privacy --without-openssl 
- | --enable-internal-md5 --with-mibs=\"\"
+ | ./configure --disable-agent --disable-privacy --without-openssl --enable-internal-md5 --with-mibs=\"\"
+ |
+ | Change Net-SNMP nsCacheTimeout:
+ | snmpset -c private -v 1 x.x.x.x 1.3.6.1.4.1.8072.1.5.3.1.2.1.3.6.1.2.1.2.2 i 1 
  |
 */
 
-#define VERSION "2.0"
+#define VERSION "2.1"
 
 #include <stdio.h>
 #include <string.h>
@@ -31,20 +32,12 @@
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
 
-#ifndef UINT32_MAX
-#define UINT32_MAX        4294967295U
-#endif
-#ifndef UINT64_MAX
-#define UINT64_MAX        18446744073709551615ULL
-#endif
-
 #define OID_ADM 7
 #define OID_OPR 8
 #define OID_IN 10
 #define OID_OUT 16
 #define OID_XIN 6
 #define OID_XOUT 10
-
 
 uint64_t S_KB=1000;
 uint64_t S_MB;
@@ -55,8 +48,10 @@ uint64_t maxin=0, minin=-1, maxout=0, minout=-1;
 uint64_t sumin=0, sumout=0;
 unsigned int iterations=0, count=-1, interval=1, extended=0, debug=0;
 struct snmp_session *ses;
+char **gargv;
 
-uint64_t getcntr(int dir, oid inst);
+uint64_t getcntr64(int dir, oid inst);
+uint32_t getcntr32(int dir, oid inst);
 int ifstatus(int type, oid inst);
 int lsif(char *ifname);
 void thr(int ifno);
@@ -66,6 +61,7 @@ void perr(struct snmp_pdu *resp);
 void usage(void);
 void version(void);
 void prifalias(oid inst);
+void prsnmpstr(char *);
 
 int main(int argc, char **argv) {
     int c;
@@ -139,13 +135,10 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if(UINT32_MAX == UINT64_MAX) {
-        fprintf(stderr, "ERROR: UINT32_MAX == UINT64_MAX\n");
-        exit(1);
-    }
-
     S_MB=S_KB*S_KB;
     S_GB=S_KB*S_KB*S_KB;
+
+    gargv=argv;
 
     SOCK_STARTUP;
     init_snmp("ttg");
@@ -170,7 +163,10 @@ int main(int argc, char **argv) {
     else if(isdigit((int)argv[optind+2][0]))
         thr(atoi(argv[optind+2]));
     else if(strlen(argv[optind+2])>=2) {
-        if(argv[optind+2][0]=='s' && argv[optind+2][1]=='e') 
+
+        if(argv[optind+2][0]=='@') 
+            snprintf(finame, sizeof(finame), "%s", argv[optind+2]+1);
+        else if(argv[optind+2][0]=='s' && argv[optind+2][1]=='e') 
             snprintf(finame, sizeof(finame), "Serial%s", argv[optind+2]+2);
         else if(argv[optind+2][0]=='e' && argv[optind+2][1]=='t') 
             snprintf(finame, sizeof(finame), "Ethernet%s", argv[optind+2]+2);
@@ -179,9 +175,9 @@ int main(int argc, char **argv) {
         else if(argv[optind+2][0]=='g' && argv[optind+2][1]=='i') 
             snprintf(finame, sizeof(finame), "GigabitEthernet%s", argv[optind+2]+2);
         else if(argv[optind+2][0]=='p' && argv[optind+2][1]=='i') 
-            snprintf(finame, sizeof(finame), "PIX Firewall 'inside' interface");
+            snprintf(finame, sizeof(finame), "Cisco PIX Security Appliance 'inside' interface");
         else if(argv[optind+2][0]=='p' && argv[optind+2][1]=='o') 
-            snprintf(finame, sizeof(finame), "PIX Firewall 'outside' interface");
+            snprintf(finame, sizeof(finame), "Cisco PIX Security Appliance 'outside' interface");
         else if(argv[optind+2][0]=='a' && argv[optind+2][1]=='i') 
             snprintf(finame, sizeof(finame), "Adaptive Security Appliance 'inside' interface");
         else if(argv[optind+2][0]=='a' && argv[optind+2][1]=='o') 
@@ -208,9 +204,21 @@ int main(int argc, char **argv) {
 
 
 void thr(int ifno) {
-    uint64_t in=0, previn=0, out=0, prevout=0, ratein=0, rateout=0;
+    uint64_t in64=0, previn64=0, out64=0, prevout64=0, ratein64=0, rateout64=0; 
+    uint32_t in32=0, previn32=0, out32=0, prevout32=0, ratein32=0, rateout32=0; 
     time_t t;
     struct tm *ltime;
+    char ifname[32];
+    
+    snprintf(ifname, sizeof(ifname), "%s.%d", "1.3.6.1.2.1.2.2.1.2", ifno);
+    printf("stats for interface (#%d) ", ifno);
+    prsnmpstr(ifname);
+    printf(" @ ");
+    prsnmpstr(".1.3.6.1.2.1.1.5.0");
+    if(extended)
+        printf(" in 64bit mode:\n");
+    else
+        printf(" in 32bit mode:\n");
 
     signal(SIGINT, (void*)finish);
 
@@ -218,38 +226,64 @@ void thr(int ifno) {
         if(iterations>count)
             finish();
 
-        previn=in;
-        prevout=out;
-
         if(extended) {
-            in=getcntr(OID_XIN, ifno);
-            out=getcntr(OID_XOUT, ifno);
-			ratein=(uint64_t)(UINT64_MAX+1-previn+in);
-			rateout=(uint64_t)(UINT64_MAX+1-prevout+out);
+            previn64=in64;
+            prevout64=out64;
+            in64=getcntr64(OID_XIN, ifno);
+            out64=getcntr64(OID_XOUT, ifno);
+            ratein64=(uint64_t)(in64-previn64);
+            rateout64=(uint64_t)(out64-prevout64);
         }
         else {
-            in=getcntr(OID_IN, ifno);
-            out=getcntr(OID_OUT, ifno);
-			ratein=(uint32_t)(UINT32_MAX+1-previn+in);
-			rateout=(uint32_t)(UINT32_MAX+1-prevout+out);
+            previn32=in32;
+            prevout32=out32;
+            in32=getcntr32(OID_IN, ifno);
+            out32=getcntr32(OID_OUT, ifno);
+            ratein32=(uint32_t)(in32-previn32);
+            rateout32=(uint32_t)(out32-prevout32);
         }
 
         if(iterations) {
-            sumin+=ratein;
-            sumout+=rateout;
-            if(ratein>maxin) maxin=ratein;
-            if(ratein<minin) minin=ratein;
-            if(rateout>maxout) maxout=rateout;
-            if(rateout<minout) minout=rateout;
+            if(extended) {
+                sumin+=ratein64;
+                sumout+=rateout64;
+                if(ratein64>maxin) maxin=ratein64;
+                if(ratein64<minin) minin=ratein64;
+                if(rateout64>maxout) maxout=rateout64;
+                if(rateout64<minout) minout=rateout64;
+            }
+            else {
+                sumin+=ratein32;
+                sumout+=rateout32;
+                if(ratein32>maxin) maxin=ratein32;
+                if(ratein32<minin) minin=ratein32;
+                if(rateout32>maxout) maxout=rateout32;
+                if(rateout32<minout) minout=rateout32;
+            }
 
             time(&t);
             ltime=localtime(&t);
 
             printf("[%02d:%02d:%02d] current throughput: in ", ltime->tm_hour, ltime->tm_min, ltime->tm_sec);
-            kbprint(ratein/interval);
+
+            if(extended)
+                kbprint((uint64_t)(ratein64/interval));
+            else
+                kbprint((uint64_t)(ratein32/interval));
+
             printf("  out ");
-            kbprint(rateout/interval);
-            if (debug) printf("  [RIN: %llu ROUT: %llu] ", in, out);
+
+            if(extended)
+                kbprint((uint64_t)(rateout64/interval));
+            else
+                kbprint((uint64_t)(rateout32/interval));
+
+            if (debug) {
+                if(extended)   printf("  [%llu-%llu=%llu] [%llu-%llu=%llu]",
+                                 in64,previn64,ratein64, out64,prevout64,rateout64);
+                else           printf("  [%u-%u=%u] [%u-%u=%u]",
+                                 in32,previn32,ratein32, out32,prevout32,rateout32);
+            }
             putchar('\n');
         }
 
@@ -262,56 +296,68 @@ void thr(int ifno) {
     }
 }
 
-uint64_t getcntr(int dir, oid inst) {
+uint64_t getcntr64(int dir, oid inst) {
     struct snmp_pdu *pdu, *resp;
-    oid iftable_oid[]  = { 1,3,6,1,2,1,2,2,1,0,0 };    // dir=9 ; inst=10
     oid ifxtable_oid[] = { 1,3,6,1,2,1,31,1,1,1,0,0 }; // dir=10; inst=11
     int stat;
     uint64_t tmp;
 
     pdu=snmp_pdu_create(SNMP_MSG_GET);
-    if(extended) {
-        ifxtable_oid[10]=dir;
-        ifxtable_oid[11]=inst;
-        snmp_add_null_var(pdu, ifxtable_oid, sizeof(ifxtable_oid)/sizeof(oid));
-    } else {
-        iftable_oid[9]=dir;
-        iftable_oid[10]=inst;
-        snmp_add_null_var(pdu, iftable_oid, sizeof(iftable_oid)/sizeof(oid));
-    }
+    ifxtable_oid[10]=dir;
+    ifxtable_oid[11]=inst;
+    snmp_add_null_var(pdu, ifxtable_oid, sizeof(ifxtable_oid)/sizeof(oid));
     
     stat=snmp_synch_response(ses, pdu, &resp);
     if (stat != STAT_SUCCESS || resp->errstat != SNMP_ERR_NOERROR) 
         perr(resp);
 
-    if(extended) {
-        if(resp->variables->type != ASN_COUNTER64) {
-            fprintf(stderr, "\nunsuported data type (only 64bit counter is supported in extended mode)\n");
-            snmp_close(ses);
-            SOCK_CLEANUP;
-            exit(1);
-        }
-    } else {
-        if(resp->variables->type != ASN_COUNTER) {
-            fprintf(stderr, "\nunsuported data type (only 32bit counter is supported in normal mode)\n");
-            snmp_close(ses);
-            SOCK_CLEANUP;
-            exit(1);
-        }
-    }       
+    if(resp->variables->type != ASN_COUNTER64) {
+        fprintf(stderr, "\nError: unsupported data type (only 64bit counter is supported in extended mode)\n");
+        snmp_close(ses);
+        SOCK_CLEANUP;
+        exit(1);
+    }
 
     tmp=resp->variables->val.counter64->high;
-
-    if(extended) {
-        tmp<<=32;
-        tmp+=resp->variables->val.counter64->low;
-    }
+    tmp<<=32;
+    tmp+=resp->variables->val.counter64->low;
 
     if(resp)
         snmp_free_pdu(resp);
 
     return tmp;
 }
+
+uint32_t getcntr32(int dir, oid inst) {
+    struct snmp_pdu *pdu, *resp;
+    oid iftable_oid[]  = { 1,3,6,1,2,1,2,2,1,0,0 };    // dir=9 ; inst=10
+    int stat;
+    uint32_t tmp;
+
+    pdu=snmp_pdu_create(SNMP_MSG_GET);
+    iftable_oid[9]=dir;
+    iftable_oid[10]=inst;
+    snmp_add_null_var(pdu, iftable_oid, sizeof(iftable_oid)/sizeof(oid));
+    
+    stat=snmp_synch_response(ses, pdu, &resp);
+    if (stat != STAT_SUCCESS || resp->errstat != SNMP_ERR_NOERROR) 
+        perr(resp);
+
+    if(resp->variables->type != ASN_COUNTER) {
+        fprintf(stderr, "\nError: unsupported data type (only 32bit counter is supported in normal mode)\n");
+        snmp_close(ses);
+        SOCK_CLEANUP;
+        exit(1);
+    }
+
+    tmp=resp->variables->val.counter64->high;
+
+    if(resp)
+        snmp_free_pdu(resp);
+
+    return tmp;
+}
+
 
 int ifstatus(int type, oid inst) {
     struct snmp_pdu *pdu, *resp;
@@ -345,7 +391,7 @@ void prifalias(oid inst) {
     char *tmp;
 
     if(!extended) {
-        fprintf(stderr, "prifalias is only available in eXtended mode\n");
+        fprintf(stderr, "ifalias is only available in eXtended mode\n");
         snmp_close(ses);
         SOCK_CLEANUP;
         exit(1);
@@ -366,11 +412,40 @@ void prifalias(oid inst) {
         printf("  \"%s\"", tmp);
         free(tmp);
     }
+
+    if(resp)
+            snmp_free_pdu(resp);
+
+}
+
+void prsnmpstr(char *stroid) {
+    struct snmp_pdu *pdu, *resp;
+    oid tmp_oid[MAX_OID_LEN];
+    size_t tmp_oid_len=MAX_OID_LEN;
+    int stat;
+    char *tmp;
+
+    pdu=snmp_pdu_create(SNMP_MSG_GET);
+    read_objid(stroid, tmp_oid, &tmp_oid_len);
+    snmp_add_null_var(pdu, tmp_oid, tmp_oid_len);
+    stat=snmp_synch_response(ses, pdu, &resp);
+
+    if (stat != STAT_SUCCESS || resp->errstat != SNMP_ERR_NOERROR) 
+        perr(resp);
+
+    if(resp->variables->val_len && strlen((char *)resp->variables->val.string)) {
+        tmp=malloc((resp->variables->val_len+1) * sizeof(char));
+        memcpy(tmp, resp->variables->val.string, resp->variables->val_len);
+        tmp[resp->variables->val_len]=0;
+        printf("%s", tmp);
+        free(tmp);
+    }
     
     if(resp)
             snmp_free_pdu(resp);
 
 }
+
 
 int lsif(char *ifname) {
     struct snmp_pdu *pdu, *resp;
@@ -380,6 +455,18 @@ int lsif(char *ifname) {
     int stat, next;
     char *tmp;
     char *ifstat[3] = { "unkn", "up", "down" };
+    char ifalias[32];
+    
+    if(!ifname) {
+        prsnmpstr(".1.3.6.1.2.1.1.1.0");
+        putchar('\n');
+        printf("Hostname: ");
+        prsnmpstr(".1.3.6.1.2.1.1.5.0");
+        printf("  Location: ");
+        prsnmpstr(".1.3.6.1.2.1.1.6.0");
+        putchar('\n');
+
+    }
 
     memmove(tmp_oid, ifname_oid, sizeof(ifname_oid));
     tmp_oid_len=sizeof(ifname_oid);
@@ -394,20 +481,23 @@ int lsif(char *ifname) {
                 memcpy(tmp, resp->variables->val.string, resp->variables->val_len);
                 tmp[resp->variables->val_len]=0;
                 if(ifname) {
-                    if(strcasecmp(ifname, tmp)==0) {
-                        printf("Found \"%s\" at index %lu:\n", tmp, resp->variables->name[resp->variables->name_length-1]);
+                   if(strcasecmp(ifname, tmp)==0) {
+                        //printf("%s found at index %lu:\n", tmp, resp->variables->name[resp->variables->name_length-1]);
                         return resp->variables->name[resp->variables->name_length-1];
-                    }
+                    } 
                 }
                 else {
-                    printf("%lu : \"%s\" [%s/%s]", 
+                    printf("%3lu : \"%s\" [%s/%s]", 
                         resp->variables->name[resp->variables->name_length-1], 
                         tmp, 
                         ifstat[ifstatus(OID_ADM, resp->variables->name[resp->variables->name_length-1])],
                         ifstat[ifstatus(OID_OPR, resp->variables->name[resp->variables->name_length-1])]
                     );
-                    if(extended)
+                    if(extended) {
                         prifalias(resp->variables->name[resp->variables->name_length-1]);
+                        snprintf(ifalias, sizeof(ifalias), "%s.%lu", "1.3.6.1.2.1.31.1.1.1.18.0", resp->variables->name[resp->variables->name_length-1]);
+                        prsnmpstr(ifalias);
+                    }
                     putchar('\n');
                 }
                 memmove((char *)tmp_oid, (char *)resp->variables->name, resp->variables->name_length * sizeof(oid));
@@ -424,7 +514,11 @@ int lsif(char *ifname) {
     if(resp) 
         snmp_free_pdu(resp);
     if(ifname) {
-        fprintf(stderr, "Unable to find \"%s\". Use 'list' to display all interfaces.\n", ifname);
+        fprintf(stderr, "Unable to find \"%s\"! Use 'list' to display all interfaces.\n", ifname);
+        if(strcmp(gargv[optind+2], ifname)) {
+            fprintf(stderr, "Did \"%s\" unnecessarily expand from \"%s\"? Prefix with @:\n%s %s %s @%s\n",
+            ifname, gargv[optind+2], gargv[0], gargv[optind], gargv[optind+1], gargv[optind+2]);
+        }
         snmp_close(ses);
         SOCK_CLEANUP;
         exit(1);
@@ -479,45 +573,46 @@ void kbprint(uint64_t var) {
 void usage(void) {
     fprintf(stderr, 
         "usage:\n"
-        "     ttg [-x] [-k 1000|1024] [-i interval] [-c count] [-u b|B|kb|kB|Mb|MB|Gb|GB]\n"
-        "         <device> <community> <if_index|if_name|if_abbr>\n"
-        "     ttg [-x] <device> <community> list\n"
-        "     ttg -v\n\n"
+        "   ttg [-x] [-k 1000|1024] [-i interval] [-c count] [-u b|B|kb|kB|Mb|MB|Gb|GB]\n"
+        "       <device> <community> <if_index|if_name|if_abbr>\n"
+        "   ttg [-x] <device> <community> list\n"
+        "   ttg -v\n\n"
+        
+        "   <device> == [udp|tcp:]<hostname|ip_addr>[:port]\n\n"
         
         "flags:\n"
-        "     -x: extended mode, use SNMPv2c, ifXTable and 64bit counters\n"
-        "         for 'list' command also includes interface descriptions\n"
-        "     -k: size of kilo, either 1000 or 1024, default %d\n"
-        "     -i: interval in seconds; note some agents (eg. Cisco ASA) may require\n"
-        "         long, even 10 second interval to return correct values, default 1\n"
-        "     -c: maximum iterations, default unlimited\n"
-        "     -u: units, b:bits B:bytes kb:kilobits kB:kilobytes etc., default auto\n\n"
+        "   -x: extended mode, use SNMPv2c, ifXTable and 64bit counters\n"
+        "       for 'list' command also includes interface descriptions\n"
+        "   -k: size of kilo, either 1000 or 1024, default %d\n"
+        "   -i: interval in seconds; note some agents (eg. Cisco ASA) may require\n"
+        "       long, even 60 seconds interval to return correct values, default 1\n"
+        "   -c: maximum iterations, default unlimited\n"
+        "   -u: units, b:bits B:bytes kb:kilobits kB:kilobytes etc., default auto\n\n"
 
         "examples:\n"
-        "     ttg router1 public list\n"
-        "     ttg -x router1 public ls\n"
-        "     ttg router1 public et2\n"
-        "     ttg -x router1 public gi3/45\n"
-        "     ttg -x -i 10 asafw1 public ao\n"
-        "     ttg router1 public \"full interface name from the 'list' command\"\n"
-        "     ttg -u MB router1 public 147\n\n"
+        "   ttg router1 public list\n"
+        "   ttg -u MB router1 public gi3/45\n"
+        "   ttg -x -i 10 asafw1 public ao\n"
+        "   ttg device public \"full interface name from the 'list' command\"\n"
+        "   ttg linux public @eth0\n"
+        "   ttg tcp:switch:1234 public vl17\n\n"
 
         "possible abbreviations:\n"
-        "     et=ethernet fa=fastethernet gi=gigabitethernet se=serial\n"
-        "     pi=pix-inside po=pix-outside ai=asa-inside ao=asa-outside\n"
-        "     vl=vlan pc=port-channel tu=tunnel ls=list\n\n", (int)S_KB);
+        "   et=ethernet fa=fastethernet gi=gigabitethernet se=serial\n"
+        "   pi=pix-inside po=pix-outside ai=asa-inside ao=asa-outside\n"
+        "   vl=vlan pc=port-channel tu=tunnel ls=list\n"
+        "   @=do not abbreviate - take whole string as is, eg: @eth0\n\n", (int)S_KB);
     exit(1);
 }
 
 void version(void) {
     fprintf(stdout, 
         "SNMP Text Traffic Grapher\n"
-        "Copyright (c) 2005 - 2009 by Antoni Sawicki\n" 
+        "Copyright (c) 2005 - 2012 by Antoni Sawicki\n" 
         "Version %s [Build: %s, %s]\n"
         "NET-SNMP Libraries=%s Headers=%s\n"
         "GCC Version %s\n"
         "Kilo=%d (default)\n"
-        "Max uint32=%u uint64=%llu\n"
         "Homepage: http://www.tenox.tc/out#ttg\n"
         "Licensed under BSD\n" 
         "Credits:\n"
@@ -525,8 +620,7 @@ void version(void) {
         "  mike@mk.tc\n"
         "  tommy@ntinternals.net\n"
         "  piston@otel.net\n",
-        VERSION, __DATE__, __TIME__, netsnmp_get_version(), PACKAGE_VERSION, __VERSION__, 
-        (int)S_KB, UINT32_MAX, UINT64_MAX);
+        VERSION, __DATE__, __TIME__, netsnmp_get_version(), PACKAGE_VERSION, __VERSION__, (int)S_KB);
     exit(0);
 }
 
