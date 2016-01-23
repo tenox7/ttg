@@ -1,9 +1,9 @@
 /*___________________________________________
  |                                           |
- | SNMP Text Traffic Grapher --- Version 2.1 |
- | Copyright (c) 2005-2012 by Antoni Sawicki |
- | Homepage ---- http://www.tenox.tc/out#ttg |
- | TTG is licensed under terms & cond of BSD |
+ | SNMP Text Traffic Grapher --- Version 2.2 |
+ | Copyright (c) 2005-2014 by Antoni Sawicki |
+ | Homepage --- http://www.tenox.net/out#ttg |
+ | Released under MIT License                |
  |___________________________________________|
  |__________________________________________/
  |
@@ -19,7 +19,7 @@
  |
 */
 
-#define VERSION "2.1"
+#define VERSION "2.2"
 
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +38,7 @@
 #define OID_OUT 16
 #define OID_XIN 6
 #define OID_XOUT 10
+#define OID_INST resp->variables->name[resp->variables->name_length-1]
 
 uint64_t S_KB=1000;
 uint64_t S_MB;
@@ -46,7 +47,7 @@ char S_Unit[2];
 
 uint64_t maxin=0, minin=-1, maxout=0, minout=-1;
 uint64_t sumin=0, sumout=0;
-unsigned int iterations=0, count=-1, interval=1, extended=0, debug=0;
+unsigned int iterations=0, count=-1, interval=1, extended=0, debug=0, physical=0;
 struct snmp_session *ses;
 char **gargv;
 
@@ -158,10 +159,16 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if(strcasecmp(argv[optind+2], "list")==0 || strcasecmp(argv[optind+2], "ls")==0) 
+    if(strcasecmp(argv[optind+2], "list")==0 || strcasecmp(argv[optind+2], "ls")==0) {
         lsif(NULL);
-    else if(isdigit((int)argv[optind+2][0]))
+    }
+    else if((strcasecmp(argv[optind+2], "listphy")==0 || strcasecmp(argv[optind+2], "lp")==0) && extended) {
+        physical=1;
+        lsif(NULL);
+    }
+    else if(isdigit((int)argv[optind+2][0])) {
         thr(atoi(argv[optind+2]));
+    }
     else if(strlen(argv[optind+2])>=2) {
 
         if(argv[optind+2][0]=='@') 
@@ -287,6 +294,7 @@ void thr(int ifno) {
             putchar('\n');
         }
 
+        fflush(stdout);
         iterations++;
 #ifndef WIN32
         sleep(interval);
@@ -384,6 +392,32 @@ int ifstatus(int type, oid inst) {
     return tmp;
 }
 
+int ifphysical(oid inst) {
+    struct snmp_pdu *pdu, *resp;
+    oid tmp_oid[] = { 1,3,6,1,2,1,31,1,1,1,17,0 };
+    int stat, tmp;
+
+    tmp_oid[11]=inst;
+    pdu=snmp_pdu_create(SNMP_MSG_GET);
+    snmp_add_null_var(pdu, tmp_oid, sizeof(tmp_oid)/sizeof(oid));
+    stat=snmp_synch_response(ses, pdu, &resp);
+
+    if (stat != STAT_SUCCESS || resp->errstat != SNMP_ERR_NOERROR) 
+        perr(resp);
+
+    if((int)resp->variables->val.integer == 0)
+        tmp=0;
+    else if((int)resp->variables->val.integer[0] == 2)
+        tmp=0;
+    else
+        tmp=1;
+
+    if(resp)
+            snmp_free_pdu(resp);
+
+    return tmp;
+}
+
 void prifalias(oid inst) {
     struct snmp_pdu *pdu, *resp;
     oid tmp_oid[] = { 1,3,6,1,2,1,31,1,1,1,18,0 };
@@ -409,7 +443,7 @@ void prifalias(oid inst) {
         tmp=malloc((resp->variables->val_len+1) * sizeof(char));
         memcpy(tmp, resp->variables->val.string, resp->variables->val_len);
         tmp[resp->variables->val_len]=0;
-        printf("  \"%s\"", tmp);
+        printf("  (%s) ", tmp);
         free(tmp);
     }
 
@@ -453,7 +487,7 @@ int lsif(char *ifname) {
     size_t tmp_oid_len;
     oid ifname_oid[] = { 1,3,6,1,2,1,2,2,1,2 };
     int stat, next;
-    char *tmp;
+    char *tmp_name;
     char *ifstat[3] = { "unkn", "up", "down" };
     char ifalias[32];
     
@@ -477,32 +511,31 @@ int lsif(char *ifname) {
         stat=snmp_synch_response(ses, pdu, &resp);
         if(stat == STAT_SUCCESS && resp->errstat == SNMP_ERR_NOERROR) {
             if(memcmp(ifname_oid, resp->variables->name, sizeof(ifname_oid)) == 0) {
-                tmp=malloc((resp->variables->val_len+1) * sizeof(char));
-                memcpy(tmp, resp->variables->val.string, resp->variables->val_len);
-                tmp[resp->variables->val_len]=0;
+                tmp_name=malloc((resp->variables->val_len+1) * sizeof(char));
+                memcpy(tmp_name, resp->variables->val.string, resp->variables->val_len);
+                tmp_name[resp->variables->val_len]='\0';
                 if(ifname) {
-                   if(strcasecmp(ifname, tmp)==0) {
-                        //printf("%s found at index %lu:\n", tmp, resp->variables->name[resp->variables->name_length-1]);
-                        return resp->variables->name[resp->variables->name_length-1];
+                   if(strcasecmp(ifname, tmp_name)==0) {
+                        //printf("LSIF: %s found at index %lu:\n", tmp_name, OID_INST);
+                        return OID_INST;
                     } 
                 }
                 else {
-                    printf("%3lu : \"%s\" [%s/%s]", 
-                        resp->variables->name[resp->variables->name_length-1], 
-                        tmp, 
-                        ifstat[ifstatus(OID_ADM, resp->variables->name[resp->variables->name_length-1])],
-                        ifstat[ifstatus(OID_OPR, resp->variables->name[resp->variables->name_length-1])]
-                    );
-                    if(extended) {
-                        prifalias(resp->variables->name[resp->variables->name_length-1]);
-                        snprintf(ifalias, sizeof(ifalias), "%s.%lu", "1.3.6.1.2.1.31.1.1.1.18.0", resp->variables->name[resp->variables->name_length-1]);
-                        prsnmpstr(ifalias);
-                    }
+                    if(extended && physical && !ifphysical(OID_INST))
+                        goto skip;
+
+                    printf("%3lu : \"%s\" [%s/%s]", OID_INST, tmp_name, ifstat[ifstatus(OID_ADM, OID_INST)], ifstat[ifstatus(OID_OPR, OID_INST)]);
+
+                    if(extended) 
+                            prifalias(OID_INST);
+
                     putchar('\n');
+
+                    skip:;
                 }
                 memmove((char *)tmp_oid, (char *)resp->variables->name, resp->variables->name_length * sizeof(oid));
                 tmp_oid_len=resp->variables->name_length * sizeof(oid);
-                free(tmp);
+                free(tmp_name);
                 if(resp) snmp_free_pdu(resp);
             }
             else 
@@ -576,13 +609,15 @@ void usage(void) {
         "   ttg [-x] [-k 1000|1024] [-i interval] [-c count] [-u b|B|kb|kB|Mb|MB|Gb|GB]\n"
         "       <device> <community> <if_index|if_name|if_abbr>\n"
         "   ttg [-x] <device> <community> list\n"
+        "   ttg -x <device> <community> listphy\n"
         "   ttg -v\n\n"
         
         "   <device> == [udp|tcp:]<hostname|ip_addr>[:port]\n\n"
         
         "flags:\n"
         "   -x: extended mode, use SNMPv2c, ifXTable and 64bit counters\n"
-        "       for 'list' command also includes interface descriptions\n"
+        "       for 'list' command also includes interface descriptions (alias)\n"
+        "       'listphy' or 'lp' for interfaces with a physical connector only\n"
         "   -k: size of kilo, either 1000 or 1024, default %d\n"
         "   -i: interval in seconds; note some agents (eg. Cisco ASA) may require\n"
         "       long, even 60 seconds interval to return correct values, default 1\n"
@@ -593,6 +628,7 @@ void usage(void) {
         "   ttg router1 public list\n"
         "   ttg -u MB router1 public gi3/45\n"
         "   ttg -x -i 10 asafw1 public ao\n"
+        "   ttg -x windows public listphy\n"
         "   ttg device public \"full interface name from the 'list' command\"\n"
         "   ttg linux public @eth0\n"
         "   ttg tcp:switch:1234 public vl17\n\n"
@@ -600,7 +636,7 @@ void usage(void) {
         "possible abbreviations:\n"
         "   et=ethernet fa=fastethernet gi=gigabitethernet se=serial\n"
         "   pi=pix-inside po=pix-outside ai=asa-inside ao=asa-outside\n"
-        "   vl=vlan pc=port-channel tu=tunnel ls=list\n"
+        "   vl=vlan pc=port-channel tu=tunnel ls=list lp=listphy\n"
         "   @=do not abbreviate - take whole string as is, eg: @eth0\n\n", (int)S_KB);
     exit(1);
 }
@@ -608,18 +644,18 @@ void usage(void) {
 void version(void) {
     fprintf(stdout, 
         "SNMP Text Traffic Grapher\n"
-        "Copyright (c) 2005 - 2012 by Antoni Sawicki\n" 
+        "Released under MIT License\n" 
         "Version %s [Build: %s, %s]\n"
         "NET-SNMP Libraries=%s Headers=%s\n"
         "GCC Version %s\n"
         "Kilo=%d (default)\n"
-        "Homepage: http://www.tenox.tc/out#ttg\n"
-        "Licensed under BSD\n" 
+        "Homepage: http://www.tenox.net/out#ttg\n"
         "Credits:\n"
-        "  tenox@tenox.tc\n"
-        "  mike@mk.tc\n"
-        "  tommy@ntinternals.net\n"
-        "  piston@otel.net\n",
+        "  Antoni Sawicki <tenox@tenox.net>\n"
+        "  Michal Krzysztofowicz <mike@mk.tc>\n"
+        "  Tomasz Nowak <tommy@ntinternals.net>\n"
+        "  S.Ivanov <piston@otel.net>\n"
+        "  Petr Laznovsky <lazna@volny.cz>\n",
         VERSION, __DATE__, __TIME__, netsnmp_get_version(), PACKAGE_VERSION, __VERSION__, (int)S_KB);
     exit(0);
 }
