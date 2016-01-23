@@ -1,25 +1,25 @@
 /*___________________________________________
  |                                           |
- | Text Traffic Grapher -------- Version 1.2 |
+ | Text Traffic Grapher -------- Version 1.4 |
  | Copyright (c) 2005-2008 by Antoni Sawicki |
- | Homepage --- http://www.tenox.tc/out/#ttg |
+ | Homepage ---- http://www.tenox.tc/out#ttg |
  | TTG is licensed under terms & cond of BSD |
  |___________________________________________|
  |__________________________________________/
  |
- | Compilation: cc ttg.c -o ttg -lnetsnmp 
+ | Compilation (Unix): cc ttg.c -o ttg -lnetsnmp 
  |
- | Net-SNMP may require: -lcrypto -lsocket -lnsl 
- | -liberty -lregex -lws2_32 (Win32) -lkstat (SunOS)
+ | Net-SNMP may also require: -lcrypto -lsocket -lnsl 
+ |  -liberty -lregex -lws2_32 (Win32) -lkstat (SunOS)
  |
- | For static snmplib build you may use:
+ | For a minimal static snmplib build you may use:
  | ./configure --disable-agent --disable-privacy --without-openssl
  | --enable-internal-md5  --with-mibs=\"\" --disable-snmpv2c 
  | --with-out-mib-modules="snmpv3mibs,mibII/vacm_vars,agent_mibs,agentx,disman/event,disman/schedule"
  |
 */
 
-#define VERSION "1.2"
+#define VERSION "1.4"
 
 #include <stdio.h>
 #include <string.h>
@@ -27,6 +27,9 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <time.h>
+#ifdef __osf__
+#include <inttypes.h>
+#endif
 
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
@@ -49,16 +52,17 @@ struct snmp_session *ses;
 uint32_t getcntr(int dir, oid inst);
 int ifstatus(int type, oid inst);
 int lsif(char *ifname);
-int finish(void);
-int perr(struct snmp_pdu *resp);
-int kbprint(uint32_t var);
-int thr(int ifno);
-int usage(void);
-int version(void);
+void thr(int ifno);
+void kbprint(uint32_t var);
+void finish(void);
+void perr(struct snmp_pdu *resp);
+void usage(void);
+void version(void);
 
 int main(int argc, char **argv) {
 	int c;
 	struct snmp_session init_ses;
+	char finame[1024];
 
 	opterr=0;
 	while ((c=getopt(argc, argv, "vi:k:u:c:")) != -1)
@@ -66,19 +70,19 @@ int main(int argc, char **argv) {
 			case 'v':
 				version();
 			case 'c':
-				if(isdigit(optarg[0]))
+				if(isdigit((int)optarg[0]))
 					count=atoi(optarg);
 				else
 					usage();
 				break;
 			case 'i':
-				if(isdigit(optarg[0]))
+				if(isdigit((int)optarg[0]))
 					interval=atoi(optarg);
 				else
 					usage();
 				break;
 			case 'k':
-				if(isdigit(optarg[0]))
+				if(isdigit((int)optarg[0]))
 					S_KB=atoi(optarg);
 				else
 					usage();
@@ -115,7 +119,7 @@ int main(int argc, char **argv) {
 
 	if(strcmp(netsnmp_get_version(), PACKAGE_VERSION)!=0) {
 		fprintf(stderr,
-			"NET-SNMP version mismatch:\n"
+			"ERROR: Net-SNMP version mismatch!\n"
 			"Compiled with headers: %s\n"
 			"Executed with library: %s\n",
 			PACKAGE_VERSION, netsnmp_get_version());
@@ -142,18 +146,41 @@ int main(int argc, char **argv) {
 
 	if(strcasecmp(argv[optind+2], "list")==0) 
 		lsif(NULL);
-	else if(isdigit(argv[optind+2][0]))
+	else if(isdigit((int)argv[optind+2][0]))
 		thr(atoi(argv[optind+2]));
+	else if(strlen(argv[optind+2])>=2) {
+		if(argv[optind+2][0]=='s' && argv[optind+2][1]=='e') 
+			snprintf(finame, sizeof(finame), "Serial%s", argv[optind+2]+2);
+		else if(argv[optind+2][0]=='e' && argv[optind+2][1]=='t') 
+			snprintf(finame, sizeof(finame), "Ethernet%s", argv[optind+2]+2);
+		else if(argv[optind+2][0]=='f' && argv[optind+2][1]=='a') 
+			snprintf(finame, sizeof(finame), "FastEthernet%s", argv[optind+2]+2);
+		else if(argv[optind+2][0]=='g' && argv[optind+2][1]=='i') 
+			snprintf(finame, sizeof(finame), "GigabitEthernet%s", argv[optind+2]+2);
+		else if(argv[optind+2][0]=='p' && argv[optind+2][1]=='i') 
+			snprintf(finame, sizeof(finame), "PIX Firewall 'inside' interface");
+		else if(argv[optind+2][0]=='p' && argv[optind+2][1]=='o') 
+			snprintf(finame, sizeof(finame), "PIX Firewall 'outside' interface");
+		else if(argv[optind+2][0]=='a' && argv[optind+2][1]=='i') 
+			snprintf(finame, sizeof(finame), "Adaptive Security Appliance 'inside' interface");
+		else if(argv[optind+2][0]=='a' && argv[optind+2][1]=='o') 
+			snprintf(finame, sizeof(finame), "Adaptive Security Appliance 'outside' interface");
+		else
+			thr(lsif(argv[optind+2]));
+
+		thr(lsif(finame));
+	}
 	else
-		thr(lsif(argv[optind+2]));
+		usage();
 
 	snmp_close(ses);
+	SOCK_CLEANUP;
 
 	return 0;
 }
 
 
-int thr(int ifno) {
+void thr(int ifno) {
 	uint32_t in=0, previn=0, out=0, prevout=0, ratein=0, rateout=0;
 	time_t t;
 	struct tm *ltime;
@@ -203,7 +230,6 @@ int thr(int ifno) {
 		Sleep(interval*1000);
 #endif
 	}
-	return 0;
 }
 
 
@@ -230,12 +256,12 @@ int lsif(char *ifname) {
 				tmp[resp->variables->val_len]=0;
 				if(ifname) {
 					if(strcasecmp(ifname, tmp)==0) {
-						fprintf(stderr, "Found \"%s\" at index %lu\n", tmp, resp->variables->name[resp->variables->name_length-1]);
+						printf("Found \"%s\" at index %lu:\n", tmp, resp->variables->name[resp->variables->name_length-1]);
 						return resp->variables->name[resp->variables->name_length-1];
 					}
 				}
 				else {
-					printf("%lu: \"%s\" [%s/%s]\n", 
+					printf("%lu : \"%s\" [%s/%s]\n", 
 						resp->variables->name[resp->variables->name_length-1], 
 						tmp, 
 						ifstat[ifstatus(OID_ADM, resp->variables->name[resp->variables->name_length-1])],
@@ -253,11 +279,18 @@ int lsif(char *ifname) {
 		else
 			perr(resp);
 	}
-	if(resp) snmp_free_pdu(resp);
-	return -1;
+	if(resp) 
+		snmp_free_pdu(resp);
+	if(ifname) {
+		fprintf(stderr, "Unable to find \"%s\". Use 'list' to display all interfaces.\n", ifname);
+		snmp_close(ses);
+		SOCK_CLEANUP;
+		exit(1);
+	}
+	return 0;
 }
 
-int finish(void) {
+void finish(void) {
 	printf( "\n---- ttg statistics ----\n"
 		"                       in          out\n"
 		"maximum throughput: ");
@@ -280,7 +313,7 @@ int finish(void) {
 	exit(0);
 }
 
-int kbprint(uint32_t var) {
+void kbprint(uint32_t var) {
 	float out;
 	char unit[2];
 
@@ -298,13 +331,11 @@ int kbprint(uint32_t var) {
 	else                                      { out=(float)var;        unit[0]=' '; unit[1]='B'; } /* bytes */
 
 	printf("%6.1f %c%c/s", out, unit[0], unit[1]);
-
-	return 0;
 }
 
 uint32_t getcntr(int dir, oid inst) {
 	struct snmp_pdu *pdu, *resp;
-	oid  tmp_oid[] = { 1,3,6,1,2,1,2,2,1,0,0 };
+	oid tmp_oid[] = { 1,3,6,1,2,1,2,2,1,0,0 };
 	int stat;
 	uint32_t tmp;
 
@@ -353,17 +384,29 @@ int ifstatus(int type, oid inst) {
 }
 
 
-int usage(void) {
+void usage(void) {
 	fprintf(stderr, 
 		"usage: ttg [-k 1000|1024] [-i interval] [-c count] [-u b|B|kb|kB|Mb|MB|Gb|GB]\n"
-                "        <device> <community> <if_number|if_name>\n"
+                "           <device> <community> <if_index|if_name|if_abbr>\n"
 		"       ttg <device> <community> list\n"
-		"       ttg -v\n"
+		"       ttg -v\n\n"
+
+		"examples:\n"
+		"       ttg router1 public 1\n"
+		"       ttg router1 public et2\n"
+		"       ttg router1 public gi3/45\n"
+		"       ttg router1 public \"full interface name from the 'list' command\"\n"
+		"       ttg router1 public list\n\n"
+
+		"possible abbreviations:\n"
+		"       et=ethernet fa=fastethernet gi=gigabitethernet se=serial\n"
+		"       pi=pix-inside po=pix-outside ai=asa-inside ao=asa-outside\n\n"
+
 	);
 	exit(1);
 }
 
-int version(void) {
+void version(void) {
 	fprintf(stdout, 
 		"Text Traffic Grapher\n"
 		"Copyright (c) 2005 - 2008 by Antoni Sawicki\n" 
@@ -371,7 +414,7 @@ int version(void) {
 		"NET-SNMP Libraries=%s Headers=%s\n"
 		"GCC Version %s\n"
 		"Kilobyte equals %d bytes (default)\n"
-		"Homepage: http://www.tenox.tc/out/#ttg\n"
+		"Homepage: http://www.tenox.tc/out#ttg\n"
 		"Licensed under BSD\n" 
 		"Credits:\n"
 		"  Idea & Coding: Antoni Sawicki <tenox@tenox.tc>\n"
@@ -380,7 +423,7 @@ int version(void) {
 	exit(0);
 }
 
-int perr(struct snmp_pdu *resp) {
+void perr(struct snmp_pdu *resp) {
 	if(resp) fprintf(stderr, "error: %s\n", snmp_errstring(resp->errstat));
 	snmp_perror("error");
 	snmp_close(ses);
