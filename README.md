@@ -24,4 +24,4 @@ A: Use 'listphy' or 'lp' instead. Extended mode (-x) required.
 
 Q: Where does the OpenVMS Net-SNMP port come from?
 
-A: Tanks to Siemens AG from here.
+A: Tanks to Siemens AG from [here](https://github.com/tenox7/net-snmp-v501-vms).
