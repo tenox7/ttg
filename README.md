@@ -38,4 +38,4 @@ A: Tanks to Siemens AG from [here](https://github.com/tenox7/net-snmp-v501-vms).
 
 **Q:** Why doesn't TTG use ISO/IEC 80000 notation?
 
-A: Because MiB stands for *Man in Black* also [this](https://xkcd.com/394/)
+A: Because MiB stands for *Men in Black* also [this](https://xkcd.com/394/)
