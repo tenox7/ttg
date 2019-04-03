@@ -1,6 +1,6 @@
 # SNMP Text Traffic Grapher 
 
-TTG is a small command line utility that displays current throughput (bandwidth usage) on an interface of a remote device such as router, switch, firewall, etc., over SNMP. You can think of TTG as command line version of STG or a high-interval/ad-hoc query/test tool for MRTG, etc. The output is very similar to ping(1) command. You can use it to quickly check/measure traffic before waiting 5 minute cycle when configuring MRTG, as a means of using the data in text form (eg. copy&paste in to an email or spreadsheet) or just a general purpose command line network administration aid.
+TTG is a small command line utility that displays current throughput (bandwidth usage) on an interface of a remote device such as router, switch, firewall, etc., over SNMP. You can think of TTG as command line version of STG or a high-interval/ad-hoc query/test tool for MRTG, etc. The output is very similar to `ping(1)` command. You can use it to quickly check/measure traffic before waiting 5 minute cycle when configuring MRTG, as a means of using the data in text form (eg. copy&paste in to an email or spreadsheet) or just a general purpose command line network administration aid.
 
 ![Screenshot](https://raw.githubusercontent.com/tenox7/ttg/master/screenshot.gif "ttg Screenshot")
 
@@ -30,7 +30,7 @@ $ snmpset -c private -v 1 x.x.x.x 1.3.6.1.4.1.8072.1.5.3.1.2.1.3.6.1.2.1.2.2 i 1
 
 Q: On Windows I get a lot of weird virtual interface names in 'list'?
 
-A: Use `listphy` or `lp' instead. Extended mode `-x` required.
+A: Use `listphy` or `lp` instead. Extended mode `-x` required.
 
 Q: Where does the OpenVMS Net-SNMP port come from?
 
