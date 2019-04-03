@@ -16,7 +16,9 @@ Q: I get zero values every second line of output or more often, or inaccurate re
   [11:38:46] current throughput: in 0.0 Mb/s out 0.0 Mb/s
 ```
 
-A: Increase the polling interval (option -i) till high enough. Some agents may require even 60 seconds or higher. On Cisco IOS you can try this: 
+A: Increase the polling interval (option -i) till high enough. Some agents may require even 60 seconds or higher. 
+
+On Cisco IOS you can try this: 
 ```
 (config) # snmp-server cache interval 1
 ```
