@@ -16,7 +16,7 @@ Q: I get zero values every second line of output or more often, or inaccurate re
   [11:38:46] current throughput: in 0.0 Mb/s out 0.0 Mb/s
 ```
 
-A: Increase the polling interval (option -i) till high enough. Some agents may require even 60 seconds or higher. 
+A: Increase the polling interval (option `-i`) till high enough. Some agents may require even 60 seconds or higher. 
 
 On Cisco IOS you can try this: 
 ```
@@ -30,7 +30,7 @@ $ snmpset -c private -v 1 x.x.x.x 1.3.6.1.4.1.8072.1.5.3.1.2.1.3.6.1.2.1.2.2 i 1
 
 Q: On Windows I get a lot of weird virtual interface names in 'list'?
 
-A: Use 'listphy' or 'lp' instead. Extended mode (-x) required.
+A: Use `listphy` or `lp' instead. Extended mode `-x` required.
 
 Q: Where does the OpenVMS Net-SNMP port come from?
 
