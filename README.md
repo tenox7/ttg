@@ -8,7 +8,7 @@ TTG allows you to specify: SI prefix k/M/G (default is auto), units bits/bytes (
 
 # FAQ:
 
-Q: I get zero values every second line of output or more often, or inaccurate readings, eg:
+**Q:** I get zero values every second line of output or more often, or inaccurate readings, eg:
 ```
   [11:38:16] current throughput: in 40.8 Mb/s out 39.3 Mb/s
   [11:38:26] current throughput: in 0.0 Mb/s out 0.0 Mb/s
@@ -28,10 +28,14 @@ If your agent is Net-SNMP try this:
 $ snmpset -c private -v 1 x.x.x.x 1.3.6.1.4.1.8072.1.5.3.1.2.1.3.6.1.2.1.2.2 i 1
 ```
 
-Q: On Windows I get a lot of weird virtual interface names in 'list'?
+**Q:** On Windows I get a lot of weird virtual interface names in 'list'?
 
 A: Use `listphy` or `lp` instead. Extended mode `-x` required.
 
-Q: Where does the OpenVMS Net-SNMP port come from?
+**Q:** Where does the OpenVMS Net-SNMP port come from?
 
 A: Tanks to Siemens AG from [here](https://github.com/tenox7/net-snmp-v501-vms).
+
+**Q:** Why doesn't TTG use ISO/IEC 80000 notation?
+
+A: Because MiB stands for *Man in Black* also [this](https://xkcd.com/394/)
