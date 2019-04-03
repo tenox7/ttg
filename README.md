@@ -28,9 +28,9 @@ If your agent is Net-SNMP try this:
 $ snmpset -c private -v 1 x.x.x.x 1.3.6.1.4.1.8072.1.5.3.1.2.1.3.6.1.2.1.2.2 i 1
 ```
 
-**Q:** On Windows I get a lot of weird virtual interface names in 'list'?
+**Q:** On Windows I get a lot of weird virtual interface names when using `list`?
 
-A: Use `listphy` or `lp` instead. Extended mode `-x` required.
+A: Use `listphy` or `lp` argument instead. Extended mode `-x` required.
 
 **Q:** Where does the OpenVMS Net-SNMP port come from?
 
