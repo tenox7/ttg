@@ -1,9 +1,10 @@
 /*___________________________________________
  |                                           |
  | SNMP Text Traffic Grapher --- Version 2.2 |
- | Copyright (c) 2005-2014 by Antoni Sawicki |
- | Homepage --- http://www.tenox.net/out#ttg |
- | Released under MIT License                |
+ | Copyright (c) 2005-2019 by Antoni Sawicki |
+ | Copyright (c) 2019 by Google LLC          |
+ | Homepage - https://github.com/tenox7/ttg/ |
+ | Released under Apache 2.0 License         |
  |___________________________________________|
  |__________________________________________/
  |
@@ -644,16 +645,16 @@ void usage(void) {
 void version(void) {
     fprintf(stdout, 
         "SNMP Text Traffic Grapher\n"
-        "Released under MIT License\n" 
+        "Released under Apache 2.0 License\n" 
         "Version %s [Build: %s, %s]\n"
         "NET-SNMP Libraries=%s Headers=%s\n"
         "GCC Version %s\n"
         "Kilo=%d (default)\n"
-        "Homepage: http://www.tenox.net/out#ttg\n"
+        "Homepage: https://github.com/tenox7/ttg/\n"
         "Credits:\n"
         "  Antoni Sawicki <tenox@tenox.net>\n"
         "  Michal Krzysztofowicz <mike@mk.tc>\n"
-        "  Tomasz Nowak <tommy@ntinternals.net>\n"
+        "  Tomasz Nowak <tn@tenoware.com>\n"
         "  S.Ivanov <piston@otel.net>\n"
         "  Petr Laznovsky <lazna@volny.cz>\n",
         VERSION, __DATE__, __TIME__, netsnmp_get_version(), PACKAGE_VERSION, __VERSION__, (int)S_KB);
