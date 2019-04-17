@@ -6,6 +6,10 @@ TTG is a small command line utility that displays current throughput (bandwidth 
 
 TTG allows you to specify: SI prefix k/M/G (default is auto), units bits/bytes (b/B), size of "kilo" which can be either 1000 or 1024 depending on a personal opinion (default is 1000), interval in seconds and count limit. Finally the utility also allows you to list all interfaces of the device and can take interface name, such as "FastEthernet1/1" or it's abbreviation ("fa1/1") instead of OID name/number as the parameter. 
 
+# Downloads
+
+Downloads Under [Releases](https://github.com/tenox7/ttg/releases)
+
 # FAQ:
 
 **Q:** I get zero values every second line of output or more often, or inaccurate readings, eg:
