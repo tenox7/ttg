@@ -642,21 +642,17 @@ void usage(void) {
 }
 
 void version(void) {
-    fprintf(stdout, 
+    printf(
         "SNMP Text Traffic Grapher\n"
-        "Released under Apache 2.0 License\n" 
-        "Version %s [Build: %s, %s]\n"
-        "NET-SNMP Libraries=%s Headers=%s\n"
-        "GCC Version %s\n"
-        "Kilo=%d (default)\n"
+        "Copyright (c) 2005-2018 by Antoni Sawicki\n"
+        "Copyright (c) 2019 by Google LLC\n"
+        "Released under Apache 2.0 License\n"
         "Homepage: https://github.com/tenox7/ttg/\n"
-        "Credits:\n"
-        "  Antoni Sawicki <tenox@tenox.net>\n"
-        "  Michal Krzysztofowicz <mike@mk.tc>\n"
-        "  Tomasz Nowak <tn@tenoware.com>\n"
-        "  S.Ivanov <piston@otel.net>\n"
-        "  Petr Laznovsky <lazna@volny.cz>\n",
-        VERSION, __DATE__, __TIME__, netsnmp_get_version(), PACKAGE_VERSION, __VERSION__, (int)S_KB);
+    );
+  	printf("Version %s [Build: %s, %s]\n", VERSION, __DATE__, __TIME__);
+  	printf("NET-SNMP Libraries=%s Headers=%s\n", netsnmp_get_version(), PACKAGE_VERSION);
+    printf("GCC Version %s\n", __VERSION__);
+    printf("Kilo=%d (default)\n", (int)S_KB);
     exit(0);
 }
 
