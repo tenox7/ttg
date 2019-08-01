@@ -8,7 +8,7 @@ confinement: strict
 grade: stable
 
 parts:
-  ttyplot:
+  ttg:
     plugin: make
     source-type: git
     source: https://github.com/tenox7/ttg.git
@@ -20,6 +20,6 @@ parts:
       - snmp
 
 apps:
-  ttyplot:
+  ttg:
     command: usr/local/bin/ttg
     plugs: [network]
