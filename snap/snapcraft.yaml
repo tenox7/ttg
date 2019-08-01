@@ -1,6 +1,6 @@
 name: ttg
 version: 2.2
-summary: display bandwidth usage of a remote device via snmp
+summary: display snmp bandwidth usage similar to ping output
 description: TTG is a small command line utility that displays current throughput (bandwidth usage) on an interface of a remote device such as router, switch, firewall, etc., over SNMP. You can think of TTG as command line version of STG or a high-interval/ad-hoc query/test tool for MRTG, etc. The output is very similar to ping(1) command. You can use it to quickly check/measure traffic before waiting 5 minute cycle when configuring MRTG, as a means of using the data in text form (eg. copy&paste in to an email or spreadsheet) or just a general purpose command line network administration aid.
 
 
@@ -17,7 +17,7 @@ parts:
       - make
       - libsnmp-dev
     stage-packages:
-      - snmp
+      - libsnmp-base
 
 apps:
   ttg:
