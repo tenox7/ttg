@@ -651,8 +651,8 @@ void version(void) {
         "Released under Apache 2.0 License\n"
         "Homepage: https://github.com/tenox7/ttg/\n"
     );
-  	printf("Version %s [Build: %s, %s]\n", VERSION, __DATE__, __TIME__);
-  	printf("NET-SNMP Libraries=%s Headers=%s\n", netsnmp_get_version(), PACKAGE_VERSION);
+    printf("Version %s [Build: %s, %s]\n", VERSION, __DATE__, __TIME__);
+    printf("NET-SNMP Libraries=%s Headers=%s\n", netsnmp_get_version(), PACKAGE_VERSION);
     printf("GCC Version %s\n", __VERSION__);
     printf("Kilo=%d (default)\n", (int)S_KB);
     exit(0);
