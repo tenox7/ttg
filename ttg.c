@@ -1,7 +1,7 @@
 /*___________________________________________
  |                                           |
  | SNMP Text Traffic Grapher --- Version 2.2 |
- | Copyright (c) 2005-2019 by Antoni Sawicki |
+ | Copyright (c) 2005-2018 by Antoni Sawicki |
  | Copyright (c) 2019 by Google LLC          |
  | Homepage - https://github.com/tenox7/ttg/ |
  | Released under Apache 2.0 License         |
@@ -287,7 +287,7 @@ void thr(int ifno) {
                 kbprint((uint64_t)(rateout32/interval));
 
             if (debug) {
-                if(extended)   printf("  [%llu-%llu=%llu] [%llu-%llu=%llu]",
+                if(extended)   printf("  [%lu-%lu=%lu] [%lu-%lu=%lu]",
                                  in64,previn64,ratein64, out64,prevout64,rateout64);
                 else           printf("  [%u-%u=%u] [%u-%u=%u]",
                                  in32,previn32,ratein32, out32,prevout32,rateout32);
@@ -406,7 +406,7 @@ int ifphysical(oid inst) {
     if (stat != STAT_SUCCESS || resp->errstat != SNMP_ERR_NOERROR) 
         perr(resp);
 
-    if((int)resp->variables->val.integer == 0)
+    if((long)resp->variables->val.integer == 0)
         tmp=0;
     else if((int)resp->variables->val.integer[0] == 2)
         tmp=0;
@@ -490,7 +490,6 @@ int lsif(char *ifname) {
     int stat, next;
     char *tmp_name;
     char *ifstat[3] = { "unkn", "up", "down" };
-    char ifalias[32];
     
     if(!ifname) {
         prsnmpstr(".1.3.6.1.2.1.1.1.0");
