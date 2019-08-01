@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <time.h>
@@ -143,6 +144,7 @@ int main(int argc, char **argv) {
     gargv=argv;
 
     SOCK_STARTUP;
+    setenv("MIBS", "", 1);
     init_snmp("ttg");
     snmp_sess_init(&init_ses);
     if(extended)
