@@ -8,7 +8,11 @@ TTG allows you to specify: SI prefix k/M/G (default is auto), units bits/bytes (
 
 # Downloads
 
-Downloads Under [Releases](https://github.com/tenox7/ttg/releases)
+```
+snap install ttg
+```
+
+For other platforms go to [releases tab](https://github.com/tenox7/ttg/releases)
 
 # FAQ:
 
